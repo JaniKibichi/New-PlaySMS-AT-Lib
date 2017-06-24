@@ -1,0 +1,25 @@
+{{ DIALOG_DISPLAY }}
+<h2>{{ Manage africastalking }}</h2>
+<form action=index.php?app=main&inc=gateway_africastalking&op=manage_save method=post>
+{{ CSRF_FORM }}
+<table class=playsms-table>
+	<tbody>
+		<tr><td class=label-sizer>{{ Gateway name }}</td><td>africastalking</td></tr>
+		<tr><td>{{ Africastalking send SMS URL }}</td><td><input type=text maxlength=250 name=up_url value="{{ africastalking_param_url }}"></td></tr>
+		<tr><td>{{ Callback URL }}</td><td><input type=text maxlength=250 name=up_callback_url value="{{ africastalking_param_callback_url }}">  {{ HINT_CALLBACK_URL }}</td></tr>
+		<tr><td>{{ Callback URL authcode }}</td><td><input type=text maxlength=250 name=up_callback_url_authcode value="{{ africastalking_param_callback_url_authcode }}"> {{ HINT_CALLBACK_URL_AUTHCODE }}</td></tr>
+		<tr><td>{{ API username }}</td><td><input type=text maxlength=30 name=up_api_username value="{{ africastalking_param_api_username }}"></td></tr>
+		<tr><td>{{ API password }}</td><td><input type=password maxlength=30 name=up_api_password value=""> {{ HINT_FILL_PASSWORD }}</td></tr>
+		<tr><td>{{ Module sender ID }}</td><td><input type=text maxlength=16 name=up_module_sender value="{{ africastalking_param_module_sender }}"> {{ HINT_MODULE_SENDER }}</td></tr>
+		<tr><td>{{ Module timezone }}</td><td><input type=text size=5 maxlength=5 name=up_datetime_timezone value="{{ africastalking_param_datetime_timezone }}"> {{ HINT_TIMEZONE }}</td></tr>
+	</tbody>
+</table>
+<p><input type=submit class=button value="{{ Save }}">
+</form>
+<br />
+{{ Notes }}:<br />
+- {{ CALLBACK_URL_IS }} {{ africastalking_param_callback_url }}<br />
+- {{ CALLBACK_URL_AUTHCODE_IS }} {{ africastalking_param_callback_url_authcode }}<br />
+- {{ CALLBACK_URL_ACCESSIBLE }}<br />
+- {{ AFRICASTALKING_PUSH_DLR }}<br />
+<p>{{ BUTTON_BACK }}
