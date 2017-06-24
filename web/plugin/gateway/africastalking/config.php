@@ -9,6 +9,9 @@ if (!$core_config['daemon_process']) {
 }
 
 $data = registry_search(0, 'gateway', 'africastalking');
+
+_log("searched the Registry for:" . $data, 3, "africastalking_config_file");
+
 $plugin_config['africastalking'] = $data['gateway']['africastalking'];
 $plugin_config['africastalking']['name'] = 'africastalking';
 $plugin_config['africastalking']['default_url'] = 'https://api.africastalking.com/restless/send?username={AFRICASTALKING_API_USERNAME}&Apikey={AFRICASTALKING_API_PASSWORD}&from={AFRICASTALKING_SENDER}&to={AFRICASTALKING_TO}&message={AFRICASTALKING_MESSAGE}';

@@ -18,7 +18,7 @@
  */
 
 defined('_SECURE_') or die('Forbidden');
-
+require_once('AfricasTalkingGateway.php');
 // hook_sendsms
 // called by main sms sender
 // return true for success delivery
@@ -26,17 +26,17 @@ defined('_SECURE_') or die('Forbidden');
 // $sms_sender : sender mobile number
 // $sms_footer : sender sms footer or sms sender ID
 // $sms_to : destination sms number
-// $sms_msg : sms message tobe delivered
+// $sms_msg : sms message to be delivered
 // $gpid : group phonebook id (optional)
 // $uid : sender User ID
 // $smslog_id : sms ID
-function africastalking_hook_sendsms($smsc, $sms_sender, $sms_footer, $sms_to, $sms_msg, $uid = '', $gpid = 0, $smslog_id = 0, $sms_type = 'text', $unicode = 0) {
+function africastalking_hook_sendsms($smsc, $sms_sender, $sms_footer, $sms_to, $sms_msg, $uid = '', $gpid = 0, $smslog_id = 254, $sms_type = 'text', $unicode = 0) {
 	global $plugin_config;
-	
 	_log("enter smsc:" . $smsc . " smslog_id:" . $smslog_id . " uid:" . $uid . " to:" . $sms_to, 3, "africastalking_hook_sendsms");
 	
 	// override plugin gateway configuration by smsc configuration
 	$plugin_config = gateway_apply_smsc_config($smsc, $plugin_config);
+	_log("override plugin:" . $plugin_config, 3, "override_plugin_gateway_at_africastalking_hook_sendsms");
 	
 	$sms_sender = stripslashes($sms_sender);
 	if ($plugin_config['africastalking']['module_sender']) {
@@ -46,48 +46,37 @@ function africastalking_hook_sendsms($smsc, $sms_sender, $sms_footer, $sms_to, $
 	$sms_footer = stripslashes($sms_footer);
 	$sms_msg = stripslashes($sms_msg);
 	$ok = false;
-	
+
+	_log("sendsms start", 3, "africastalking_hook_sendsms");
+
 	if ($sms_footer) {
 		$sms_msg = $sms_msg . $sms_footer;
 	}
+
+	// grab login credentials
+	$username= $plugin_config['africastalking']['api_username'];
+	$apikey= $plugin_config['africastalking']['api_password'];
+
+	//initiate new gateway instance
+	$gateway    = new AfricasTalkingGateway($username, $apikey);
+	_log("gateway initiated", 3, "africastalking_gateway_class");	
 	
 	if ($sms_sender && $sms_to && $sms_msg) {
-		
-		$unicode_query_string = '';
-		if ($unicode) {
-			if (function_exists('mb_convert_encoding')) {
-				// $sms_msg = mb_convert_encoding($sms_msg, "UCS-2BE", "auto");
-				$sms_msg = mb_convert_encoding($sms_msg, "UCS-2", "auto");
-				// $sms_msg = mb_convert_encoding($sms_msg, "UTF-8", "auto");
-				$unicode_query_string = "&coding=8"; // added at the of query string if unicode
-			}
-		}
-		
-		// $plugin_config['africastalking']['default_url'] = 'https://api.africastalking.com/restless/send?username={AFRICASTALKING_API_USERNAME}&Apikey={AFRICASTALKING_API_PASSWORD}&from={AFRICASTALKING_SENDER}&to={AFRICASTALKING_TO}&message={AFRICASTALKING_MESSAGE}';
-		$url = htmlspecialchars_decode($plugin_config['africastalking']['url']);
-		$url = str_replace('{AFRICASTALKING_API_USERNAME}', urlencode($plugin_config['africastalking']['api_username']), $url);
-		$url = str_replace('{AFRICASTALKING_API_PASSWORD}', urlencode($plugin_config['africastalking']['api_password']), $url);
-		$url = str_replace('{AFRICASTALKING_SENDER}', urlencode($sms_sender), $url);
-		$url = str_replace('{AFRICASTALKING_TO}', urlencode($sms_to), $url);
-		$url = str_replace('{AFRICASTALKING_MESSAGE}', urlencode($sms_msg), $url);
-		$url = str_replace('{AFRICASTALKING_CALLBACK_URL}', urlencode($plugin_config['africastalking']['callback_url']), $url);
-		
-		_log("send url:[" . $url . "]", 3, "africastalking_hook_sendsms");
-		
+		_log("sendsms start", 3, "talking_to_africastalking_gateway");
+		//sending params
+		$from = $sms_sender;
+		$recipients = $sms_to;
+		$message =  $sms_msg;
 		// send it
-		$response = file_get_contents($url);
-		
-		// 14395227002806904200 SENT
-		// 0 User Not Found
-		$resp = explode(' ', $response, 2);
-		
-		// a single non-zero respond will be considered as a SENT response
-		if ($resp[0]) {
-			$c_message_id = (int) $resp[0];
-			_log("sent smslog_id:" . $smslog_id . " message_id:" . $c_message_id . " smsc:" . $smsc, 2, "africastalking_hook_sendsms");
+		try 
+		{ 
+
+		$results = $gateway->sendMessage($recipients, $message, $from);
+		foreach($results as $result) {
+		if($result){
 			$db_query = "
 				INSERT INTO " . _DB_PREF_ . "_gatewayAfricastalking_log (local_smslog_id, remote_smslog_id)
-				VALUES ('$smslog_id', '$c_message_id')";
+				VALUES ('$smslog_id', '$result->messageId')";
 			$id = @dba_insert_id($db_query);
 			if ($id) {
 				$ok = true;
@@ -98,15 +87,17 @@ function africastalking_hook_sendsms($smsc, $sms_sender, $sms_footer, $sms_to, $
 				$p_status = 0;
 				dlr($smslog_id, $uid, $p_status);
 			}
-		} else {
-			// even when the response is not what we expected we still print it out for debug purposes
-			if ($resp[0] === '0') {
-				$resp = trim($resp[1]);
-			} else {
-				$resp = $response;
-			}
-			_log("failed smslog_id:" . $smslog_id . " resp:[" . $resp . "] smsc:" . $smsc, 2, "africastalking_hook_sendsms");
 		}
+		_log("Success" . " Number: " .$result->number." Status: " .$result->status." MessageId: " .$result->messageId , 3, "talking_to_africastalking_gateway");
+		}
+		}
+		catch ( AfricasTalkingGatewayException $e )
+		{
+		_log("Encountered an error while sending: ".$e->getMessage(), 3,"africastalking_gateway_class_TRY_CATCH");
+		}
+
+	} else {
+		_log("sendsms start ABORTED", 3, "sms_sender_&&_sms_to_&&_sms_msg_not_supplied");
 	}
 	if (!$ok) {
 		$p_status = 2;

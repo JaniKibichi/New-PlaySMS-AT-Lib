@@ -83,11 +83,13 @@ switch (_OP_){
 			if ($up_api_password) {
 				$items['api_password'] = $up_api_password;
 			}
+
 			if (registry_update(0, 'gateway', 'africastalking', $items)) {
 				$_SESSION['dialog']['info'][] = _('Gateway module configurations has been saved');
 			} else {
 				$_SESSION['dialog']['danger'][] = _('Fail to save gateway module configurations');
 			}
+			
 		} else {
 			$_SESSION['dialog']['danger'][] = _('All mandatory fields must be filled');
 		}
