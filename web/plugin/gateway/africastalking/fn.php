@@ -1,23 +1,6 @@
 <?php
-
-/**
- * This file is part of playSMS.
- *
- * playSMS is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * playSMS is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with playSMS. If not, see <http://www.gnu.org/licenses/>.
- */
-
 defined('_SECURE_') or die('Forbidden');
+
 // hook_sendsms
 // called by main sms sender
 // return true for success delivery
@@ -35,7 +18,6 @@ function africastalking_hook_sendsms($smsc, $sms_sender, $sms_footer, $sms_to, $
 	
 	// override plugin gateway configuration by smsc configuration
 	$plugin_config = gateway_apply_smsc_config($smsc, $plugin_config);
-	_log("override plugin:" . $plugin_config, 3, "africastalking_hook_sendsms");
 	
 	$sms_sender = stripslashes($sms_sender);
 	if ($plugin_config['africastalking']['module_sender']) {
@@ -53,61 +35,84 @@ function africastalking_hook_sendsms($smsc, $sms_sender, $sms_footer, $sms_to, $
 	}
 
 	if ($sms_sender && $sms_to && $sms_msg) {
-		
-		$unicode_query_string = '';
-		if ($unicode) {
-			if (function_exists('mb_convert_encoding')) {
-				// $sms_msg = mb_convert_encoding($sms_msg, "UCS-2BE", "auto");
-				$sms_msg = mb_convert_encoding($sms_msg, "UCS-2", "auto");
-				// $sms_msg = mb_convert_encoding($sms_msg, "UTF-8", "auto");
-				$unicode_query_string = "&coding=8"; // added at the of query string if unicode
+
+		$params = array(
+				'username' => $plugin_config['africastalking']['api_username'],
+				'to'       => $sms_to,
+				'message'  => $sms_msg,
+		);		
+
+		$requestUrl  = "https://api.africastalking.com/version1/messaging";		
+		$requestBody = http_build_query($params, '', '&');
+		executePost();
+
+		function executePost ()
+		{
+			if (function_exists('curl_init')) {
+				$ch = curl_init();
+				curl_setopt($ch, CURLOPT_POSTFIELDS, $requestBody);
+				curl_setopt($ch, CURLOPT_POST, 1);
+				curl_setopt($ch, CURLOPT_HTTPHEADER, array ('Accept: application/json','apikey: ' . $plugin_config['africastalking']['api_password']));
+				doExecute($ch);
+			} else {
+				_log("fail to sendsms due to missing PHP curl functions", 3, "africastalking_hook_sendsms");
 			}
 		}
-		
-		// $plugin_config['africastalking']['default_url'] = 'http://example.api.url/handler.php?user={GENERIC_API_USERNAME}&pwd={GENERIC_API_PASSWORD}&sender={GENERIC_SENDER}&msisdn={GENERIC_TO}&message={GENERIC_MESSAGE}&dlr-url={GENERIC_CALLBACK_URL}';
-		$url = htmlspecialchars_decode($plugin_config['africastalking']['default_url']);
-		$url = str_replace('{AFRICASTALKING_API_USERNAME}', urlencode($plugin_config['africastalking']['api_username']), $url);
-		$url = str_replace('{AFRICASTALKING_API_PASSWORD}', urlencode($plugin_config['africastalking']['api_password']), $url);
-		$url = str_replace('{AFRICASTALKING_SENDER}', urlencode($sms_sender), $url);
-		$url = str_replace('{AFRICASTALKING_TO}', urlencode($sms_to), $url);
-		$url = str_replace('{AFRICASTALKING_MESSAGE}', urlencode($sms_msg), $url);
-		$url = str_replace('{AFRICASTALKING_CALLBACK_URL}', urlencode($plugin_config['africastalking']['callback_url']), $url);
-		
-		_log("send url:[" . $url . "]", 3, "africastalking_hook_sendsms");
-		
-		// send it
-		$response = file_get_contents($url);
-		
-		// 14395227002806904200 SENT
-		// 0 User Not Found
-		$resp = explode(' ', $response, 2);
-		
-		// a single non-zero respond will be considered as a SENT response
-		if ($resp[0]) {
-			$c_message_id = (int) $resp[0];
-			_log("sent smslog_id:" . $smslog_id . " message_id:" . $c_message_id . " smsc:" . $smsc, 2, "africastalking_hook_sendsms");
-			$db_query = "
-				INSERT INTO " . _DB_PREF_ . "_gatewayGeneric_log (local_smslog_id, remote_smslog_id)
-				VALUES ('$smslog_id', '$c_message_id')";
-			$id = @dba_insert_id($db_query);
-			if ($id) {
-				$ok = true;
-				$p_status = 1;
-				dlr($smslog_id, $uid, $p_status);
-			} else {
-				$ok = true;
-				$p_status = 0;
-				dlr($smslog_id, $uid, $p_status);
-			}
-		} else {
-			// even when the response is not what we expected we still print it out for debug purposes
-			if ($resp[0] === '0') {
-				$resp = trim($resp[1]);
-			} else {
-				$resp = $response;
-			}
-			_log("failed smslog_id:" . $smslog_id . " resp:[" . $resp . "] smsc:" . $smsc, 2, "africastalking_hook_sendsms");
+
+		function setCurlOpts (&$curlHandle_)
+		{
+			curl_setopt($curlHandle_, CURLOPT_TIMEOUT, 60);
+			curl_setopt($curlHandle_, CURLOPT_SSL_VERIFYPEER, FALSE);
+			curl_setopt($curlHandle_, CURLOPT_URL, $requestUrl);
+			curl_setopt($curlHandle_, CURLOPT_RETURNTRANSFER, true);
 		}
+
+		function doExecute (&$curlHandle_)
+		{
+			try {	   	
+				setCurlOpts($curlHandle_);
+				$theResponseBody = curl_exec($curlHandle_);
+				$responseInfo = curl_getinfo($curlHandle_);			
+				$responseBody = $theResponseBody;
+				curl_close($curlHandle_);
+
+				_log("sendsms url:[" . $requestUrl . "] callback:[" . $plugin_config['africastalking']['callback_url'], "] smsc:[" . $smsc . "]", 3, "africastalking_hook_sendsms");
+				$resp = json_decode($theResponseBody);
+
+				if ($resp->status) {
+					if($responseInfo['http_code']==201){
+						$c_status = $resp->status;
+						$c_message_id = $resp->messageId;					
+					} else{
+						$c_error_text =	$responseInfo['http_code'];				
+					}
+					_log("sent smslog_id:" . $smslog_id . " message_id:" . $c_message_id . " status:" . $c_status . " error:" . $c_error_text . " smsc:[" . $smsc . "]", 2, "africastalking_hook_sendsms");
+					$db_query = "
+						INSERT INTO " . _DB_PREF_ . "_gatewayTwilio (local_smslog_id,remote_smslog_id,status,error_text)
+						VALUES ('$smslog_id','$c_message_id','$c_status','$c_error_text')";
+					$id = @dba_insert_id($db_query);
+					if ($id && ($c_status == 'Sent')) {
+						$ok = true;
+						$p_status = 0;
+					} else {
+						$p_status = 2;
+					}
+					dlr($smslog_id, $uid, $p_status);
+				} else {
+					// even when the response is not what we expected we still print it out for debug purposes
+					$resp = str_replace("\n", " ", $resp);
+					$resp = str_replace("\r", " ", $resp);
+					_log("failed smslog_id:" . $smslog_id . " resp:" . $resp . " smsc:[" . $smsc . "]", 2, "africastalking_hook_sendsms");
+				}	
+
+			}
+				
+			catch(Exeption $e) {
+				curl_close($curlHandle_);
+				throw $e;
+			}
+		}
+
 	}
 	if (!$ok) {
 		$p_status = 2;
