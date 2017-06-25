@@ -33,62 +33,27 @@ function africastalking_hook_sendsms($smsc, $sms_sender, $sms_footer, $sms_to, $
 	if ($sms_footer) {
 		$sms_msg = $sms_msg . $sms_footer;
 	}
-
+    //'https://api.africastalking.com/restless/send?username={AFRICASTALKING_API_USERNAME}&Apikey={AFRICASTALKING_API_PASSWORD}&from={AFRICASTALKING_SENDER}&to={AFRICASTALKING_TO}&message={AFRICASTALKING_MESSAGE}';
 	if ($sms_sender && $sms_to && $sms_msg) {
-
-		$params = array(
-				'username' => $plugin_config['africastalking']['api_username'],
-				'to'       => $sms_to,
-				'message'  => $sms_msg,
-		);		
-
-		$requestUrl  = "https://api.africastalking.com/version1/messaging";		
-		$requestBody = http_build_query($params, '', '&');
-		executePost();
-
-		function executePost ()
-		{
-			if (function_exists('curl_init')) {
-				$ch = curl_init();
-				curl_setopt($ch, CURLOPT_POSTFIELDS, $requestBody);
-				curl_setopt($ch, CURLOPT_POST, 1);
-				curl_setopt($ch, CURLOPT_HTTPHEADER, array ('Accept: application/json','apikey: ' . $plugin_config['africastalking']['api_password']));
-				doExecute($ch);
-			} else {
-				_log("fail to sendsms due to missing PHP curl functions", 3, "africastalking_hook_sendsms");
-			}
-		}
-
-		function setCurlOpts (&$curlHandle_)
-		{
-			curl_setopt($curlHandle_, CURLOPT_TIMEOUT, 60);
-			curl_setopt($curlHandle_, CURLOPT_SSL_VERIFYPEER, FALSE);
-			curl_setopt($curlHandle_, CURLOPT_URL, $requestUrl);
-			curl_setopt($curlHandle_, CURLOPT_RETURNTRANSFER, true);
-		}
-
-		function doExecute (&$curlHandle_)
-		{
-			try {	   	
-				setCurlOpts($curlHandle_);
-				$theResponseBody = curl_exec($curlHandle_);
-				$responseInfo = curl_getinfo($curlHandle_);			
-				$responseBody = $theResponseBody;
-				curl_close($curlHandle_);
-
-				_log("sendsms url:[" . $requestUrl . "] callback:[" . $plugin_config['africastalking']['callback_url'], "] smsc:[" . $smsc . "]", 3, "africastalking_hook_sendsms");
-				$resp = json_decode($theResponseBody);
-
+		$url = $plugin_config['africastalking']['url'] . '/restless/send?username=' . $plugin_config['africastalking']['api_username'] .'&Apikey=' . $plugin_config['africastalking']['api_password'] . '&from=' .$plugin_config['africastalking']['module_sender']. '&to=' . $sms_to . '&message=' . $sms_msg;
+		if (function_exists('curl_init')) {
+			$ch = curl_init($url);
+			curl_setopt($ch, CURLOPT_TIMEOUT, 60);	
+			curl_setopt($ch, CURLOPT_RETURNTRANSFER, TRUE);			
+			$returns = curl_exec($ch);
+			curl_close($ch);	
+			_log("sendsms url:[" . $url . "] callback:[" . $plugin_config['africastalking']['callback_url'], "] smsc:[" . $smsc . "]", 3, "africastalking_hook_sendsms");
+			$resp = json_decode($returns);		
 				if ($resp->status) {
-					if($responseInfo['http_code']==201){
+					if($resp->http_code==201){
 						$c_status = $resp->status;
 						$c_message_id = $resp->messageId;					
 					} else{
-						$c_error_text =	$responseInfo['http_code'];				
+						$c_error_text =	$resp->http_code;				
 					}
 					_log("sent smslog_id:" . $smslog_id . " message_id:" . $c_message_id . " status:" . $c_status . " error:" . $c_error_text . " smsc:[" . $smsc . "]", 2, "africastalking_hook_sendsms");
 					$db_query = "
-						INSERT INTO " . _DB_PREF_ . "_gatewayTwilio (local_smslog_id,remote_smslog_id,status,error_text)
+						INSERT INTO " . _DB_PREF_ . "_gatewayAfricastalking (local_smslog_id,remote_smslog_id,status,error_text)
 						VALUES ('$smslog_id','$c_message_id','$c_status','$c_error_text')";
 					$id = @dba_insert_id($db_query);
 					if ($id && ($c_status == 'Sent')) {
@@ -97,22 +62,16 @@ function africastalking_hook_sendsms($smsc, $sms_sender, $sms_footer, $sms_to, $
 					} else {
 						$p_status = 2;
 					}
-					dlr($smslog_id, $uid, $p_status);
+					dlr($smslog_id, $uid, $p_status);	
 				} else {
 					// even when the response is not what we expected we still print it out for debug purposes
 					$resp = str_replace("\n", " ", $resp);
 					$resp = str_replace("\r", " ", $resp);
-					_log("failed smslog_id:" . $smslog_id . " resp:" . $resp . " smsc:[" . $smsc . "]", 2, "africastalking_hook_sendsms");
-				}	
-
-			}
-				
-			catch(Exeption $e) {
-				curl_close($curlHandle_);
-				throw $e;
-			}
+					_log("failed smslog_id:" . $smslog_id . " resp:" . $resp . " smsc:[" . $smsc . "]", 2, "africastalking_hook_sendsms");			
+				}					
+		}else{
+			_log("fail to sendsms due to missing PHP curl functions", 3, "africastalking_hook_sendsms");
 		}
-
 	}
 	if (!$ok) {
 		$p_status = 2;

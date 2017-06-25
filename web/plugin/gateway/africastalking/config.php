@@ -1,29 +1,16 @@
 <?php
 defined('_SECURE_') or die('Forbidden');
 
-$callback_url = '';
-if (!$core_config['daemon_process']) {
-	$callback_url = $_SERVER['HTTP_HOST'] . dirname($_SERVER['PHP_SELF']) . "/plugin/gateway/africastalking/callback.php";
-	$callback_url = str_replace("//", "/", $callback_url);
-	$callback_url = ($core_config['ishttps'] ? "https://" : "http://") . $callback_url;
-}
-
-$data = registry_search(0, 'gateway', 'africastalking');
-
-_log("searched the Registry for:" . $data, 3, "africastalking_config_file");
-
-$plugin_config['africastalking'] = $data['gateway']['africastalking'];
-$plugin_config['africastalking']['name'] = 'africastalking';
-$plugin_config['africastalking']['default_url'] = 'https://api.africastalking.com/restless/send?username={AFRICASTALKING_API_USERNAME}&Apikey={AFRICASTALKING_API_PASSWORD}&from={AFRICASTALKING_SENDER}&to={AFRICASTALKING_TO}&message={AFRICASTALKING_MESSAGE}';
-$plugin_config['africastalking']['default_callback_url'] = $callback_url;
-if (!trim($plugin_config['africastalking']['url'])) {
-	$plugin_config['africastalking']['url'] = $plugin_config['africastalking']['default_url'];
-}
-if (!trim($plugin_config['africastalking']['callback_url'])) {
-	$plugin_config['africastalking']['callback_url'] = $plugin_config['africastalking']['default_callback_url'];
-}
-if (!trim($plugin_config['africastalking']['callback_url_authcode'])) {
-	$plugin_config['africastalking']['callback_url_authcode'] = sha1(_PID_);
+$db_query = "SELECT * FROM " . _DB_PREF_ . "_gatewayAfricastalking_config";
+$db_result = dba_query($db_query);
+if ($db_row = dba_fetch_array($db_result)) {
+	$plugin_config['africastalking']['name'] = 'africastalking';
+	$plugin_config['africastalking']['url'] = ($db_row['cfg_send_url'] ? $db_row['cfg_send_url'] : 'https://api.africastalking.com');
+	$plugin_config['africastalking']['callback_url'] = ($db_row['cfg_callback_url'] ? $db_row['cfg_callback_url'] : $core_config['http_path']['base'] . 'plugin/gateway/africastalking/callback.php');
+	$plugin_config['africastalking']['api_username'] = $db_row['cfg_username'];
+	$plugin_config['africastalking']['api_password'] = $db_row['cfg_password'];
+	$plugin_config['africastalking']['module_sender'] = $db_row['cfg_module_sender'];
+	$plugin_config['africastalking']['datetime_timezone'] = $db_row['cfg_datetime_timezone'];
 }
 
 // smsc configuration

@@ -1,21 +1,4 @@
 <?php
-/**
- * This file is part of playSMS.
- *
- * playSMS is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * playSMS is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with playSMS. If not, see <http://www.gnu.org/licenses/>.
- */
-
 defined('_SECURE_') or die('Forbidden');
 
 if (!auth_isadmin()) {
@@ -72,19 +55,31 @@ switch (_OP_){
 		$up_module_sender = $_REQUEST['up_module_sender'];
 		$up_datetime_timezone = $_REQUEST['up_datetime_timezone'];
 		if ($up_url) {
-			$items = array(
-				'url' => $up_url,
-				'callback_url' => $up_callback_url,
-				'callback_url_authcode' => $up_callback_url_authcode,
-				'api_username' => $up_api_username,
-				'module_sender' => $up_module_sender,
-				'datetime_timezone' => $up_datetime_timezone 
-			);
+			if ($up_module_sender) {
+				$up_module_sender2 = $up_module_sender;
+			}	
+			if ($up_callback_url) {
+				$up_callback_url2 = $up_callback_url;
+			}						
+			if ($up_url) {
+				$up_url2 = $up_url;
+			}			
+			if ($up_api_username) {
+				$up_api_username2 = $up_api_username;
+			}			
 			if ($up_api_password) {
-				$items['api_password'] = $up_api_password;
+				$up_api_password2 = $up_api_password;
 			}
-
-			if (registry_update(0, 'gateway', 'africastalking', $items)) {
+			$db_query = "
+				UPDATE " . _DB_PREF_ . "_gatewayAfricastalking_config
+				SET c_timestamp='" . time() . "',
+				cfg_module_sender='$up_module_sender2',
+				cfg_send_url='$up_url2',			
+				cfg_callback_url='$up_callback_url2',						
+				cfg_username='$up_api_username2',
+				cfg_password='$up_api_password2',
+				cfg_datetime_timezone='$up_datetime_timezone '";
+			if (@dba_affected_rows($db_query)) {
 				$_SESSION['dialog']['info'][] = _('Gateway module configurations has been saved');
 			} else {
 				$_SESSION['dialog']['danger'][] = _('Fail to save gateway module configurations');
